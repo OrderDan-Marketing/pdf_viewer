@@ -1,13 +1,25 @@
 {
-  "type": "static",
+  "framework": "static",
   "buildCommand": "",
   "outputDirectory": ".",
-  "installCommand": "",
-  "framework": "static",
+  "install": "",
+  "serverless": false,
+  "staticFiles": {
+    "pdfs": {
+      "headers": {
+        "Content-Type": "application/pdf",
+        "Cache-Control": "public, max-age=31536000"
+      }
+    },
+    "*.pdf": {
+      "headers": {
+        "Content-Type": "application/pdf"
+      }
+    }
+  },
   "routes": [
     {
-      "src": "/pdfs/(.*)",
-      "dest": "/pdfs/$1",
+      "src": "/pdfs/(.*\\.pdf)",
       "headers": {
         "Content-Type": "application/pdf"
       }
