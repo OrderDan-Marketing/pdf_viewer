@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF 閱讀器</title>
+    <title>PDF 閱讀器 - 除錯版本</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         body {
@@ -269,6 +269,50 @@
         .keyboard-hints.show {
             opacity: 1;
         }
+
+        /* 除錯面板 */
+        .debug-panel {
+            background: #fffbf0;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            margin: 20px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .debug-panel h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+
+        .debug-log {
+            white-space: pre-wrap;
+            color: #495057;
+        }
+
+        .test-buttons {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px;
+        }
+
+        .test-buttons button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .test-buttons button:hover {
+            background: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -281,6 +325,21 @@
             <button onclick="loadFromUrl()">載入PDF</button>
             
             <span id="fileName" style="margin-left: auto; font-size: 14px;"></span>
+        </div>
+
+        <!-- 除錯面板 -->
+        <div class="debug-panel">
+            <h4>🔍 除錯資訊</h4>
+            <div class="debug-log" id="debugLog">系統初始化中...</div>
+        </div>
+
+        <!-- 測試按鈕 -->
+        <div class="test-buttons">
+            <h4>🧪 測試功能</h4>
+            <button onclick="testPDFJS()">測試 PDF.js 載入</button>
+            <button onclick="testCORS()">測試 CORS 設定</button>
+            <button onclick="testFileAccess()">測試檔案存取</button>
+            <button onclick="clearDebugLog()">清除記錄</button>
         </div>
         
         <div class="controls" id="controls" style="display: none;">
@@ -332,41 +391,140 @@
         let isFullscreen = false;
         let hideControlsTimeout;
         
+        // 除錯日誌函數
+        function debugLog(message, type = 'info') {
+            const debugLogEl = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            debugLogEl.textContent += logEntry;
+            debugLogEl.scrollTop = debugLogEl.scrollHeight;
+            
+            // 同時輸出到瀏覽器控制台
+            console.log(`PDF Viewer Debug - ${logEntry.trim()}`);
+        }
+
+        // 清除除錯記錄
+        function clearDebugLog() {
+            document.getElementById('debugLog').textContent = '';
+            debugLog('除錯記錄已清除');
+        }
+
         // 設定 PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            debugLog('PDF.js worker 設定成功');
+        } catch (error) {
+            debugLog(`PDF.js worker 設定失敗: ${error.message}`, 'error');
+        }
+
+        // 測試 PDF.js 是否正常載入
+        function testPDFJS() {
+            debugLog('開始測試 PDF.js...');
+            
+            if (typeof pdfjsLib === 'undefined') {
+                debugLog('PDF.js 未載入！請檢查 CDN 連線', 'error');
+                return;
+            }
+            
+            debugLog(`PDF.js 版本: ${pdfjsLib.version}`);
+            debugLog(`Worker 路徑: ${pdfjsLib.GlobalWorkerOptions.workerSrc}`);
+            debugLog('PDF.js 測試完成', 'success');
+        }
+
+        // 測試 CORS 設定
+        async function testCORS() {
+            debugLog('開始測試 CORS 設定...');
+            
+            const testUrls = [
+                './pdfs/crm-pos-guide.pdf',
+                'pdfs/crm-pos-guide.pdf',
+                '/pdfs/crm-pos-guide.pdf'
+            ];
+            
+            for (const url of testUrls) {
+                try {
+                    const response = await fetch(url, { method: 'HEAD' });
+                    debugLog(`URL: ${url} - 狀態: ${response.status} ${response.statusText}`);
+                } catch (error) {
+                    debugLog(`URL: ${url} - 錯誤: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // 測試檔案存取
+        async function testFileAccess() {
+            debugLog('開始測試檔案存取...');
+            
+            const testUrl = document.getElementById('urlInput').value || 'pdfs/crm-pos-guide.pdf';
+            const resolvedUrl = resolveUrl(testUrl);
+            
+            debugLog(`原始 URL: ${testUrl}`);
+            debugLog(`解析後 URL: ${resolvedUrl}`);
+            
+            try {
+                const response = await fetch(resolvedUrl);
+                debugLog(`HTTP 狀態: ${response.status} ${response.statusText}`);
+                debugLog(`Content-Type: ${response.headers.get('Content-Type')}`);
+                debugLog(`Content-Length: ${response.headers.get('Content-Length')}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    debugLog(`檔案大小: ${blob.size} bytes`);
+                    debugLog(`檔案類型: ${blob.type}`);
+                    
+                    if (blob.type === 'application/pdf') {
+                        debugLog('檔案存取測試成功！', 'success');
+                    } else {
+                        debugLog(`警告: 檔案類型不是 PDF (${blob.type})`, 'warning');
+                    }
+                } else {
+                    debugLog(`檔案存取失敗: HTTP ${response.status}`, 'error');
+                }
+            } catch (error) {
+                debugLog(`檔案存取錯誤: ${error.message}`, 'error');
+            }
+        }
         
         // 解析相對路徑為絕對路徑
         function resolveUrl(url) {
             if (!url) return url;
             
+            debugLog(`開始解析 URL: ${url}`);
+            
             // 如果已經是完整的 HTTP/HTTPS URL，直接返回
             if (url.startsWith('http://') || url.startsWith('https://')) {
+                debugLog(`已是完整 URL: ${url}`);
                 return url;
             }
             
             // 處理相對路徑
             const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+            debugLog(`基礎 URL: ${baseUrl}`);
             
             // 移除開頭的 ./ 如果存在
             if (url.startsWith('./')) {
                 url = url.substring(2);
+                debugLog(`移除 ./: ${url}`);
             }
             
             // 組合完整 URL
             const fullUrl = baseUrl + url;
-            console.log('原始路徑:', url);
-            console.log('解析後路徑:', fullUrl);
+            debugLog(`最終 URL: ${fullUrl}`);
             
             return fullUrl;
         }
         
         // 頁面載入時檢查URL參數
         window.addEventListener('DOMContentLoaded', function() {
+            debugLog('頁面載入完成，開始初始化...');
+            
             const urlParams = new URLSearchParams(window.location.search);
             const pdfUrl = urlParams.get('url');
             const page = urlParams.get('page');
             const scaleParam = urlParams.get('scale');
             const fullscreen = urlParams.get('fullscreen') === 'true';
+            
+            debugLog(`URL 參數 - url: ${pdfUrl}, page: ${page}, scale: ${scaleParam}, fullscreen: ${fullscreen}`);
             
             if (pdfUrl) {
                 document.getElementById('urlInput').value = pdfUrl;
@@ -404,9 +562,14 @@
                     // 如果有PDF URL，隱藏上傳工具列和提示
                     hideUploadUI();
                 }).catch(error => {
-                    console.error('載入PDF失敗:', error);
+                    debugLog(`載入PDF失敗: ${error.message}`, 'error');
                 });
+            } else {
+                debugLog('無 URL 參數，等待使用者操作');
             }
+            
+            // 執行初始測試
+            testPDFJS();
         });
         
         // 隱藏上傳介面
@@ -429,6 +592,7 @@
             const keyboardHints = document.getElementById('keyboardHints');
             
             isFullscreen = !isFullscreen;
+            debugLog(`切換全版面模式: ${isFullscreen}`);
             
             if (isFullscreen) {
                 container.className = 'container fullscreen-mode';
@@ -508,13 +672,22 @@
         // 檔案上傳處理
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
+            debugLog(`選擇檔案: ${file ? file.name : '無'}`);
+            
             if (file && file.type === 'application/pdf') {
+                debugLog(`檔案大小: ${file.size} bytes`);
                 const fileReader = new FileReader();
                 fileReader.onload = function() {
+                    debugLog('檔案讀取完成，開始載入PDF...');
                     loadPDF(new Uint8Array(this.result), file.name);
                     hideUploadUI();
                 };
+                fileReader.onerror = function(error) {
+                    debugLog(`檔案讀取錯誤: ${error}`, 'error');
+                };
                 fileReader.readAsArrayBuffer(file);
+            } else {
+                debugLog('請選擇有效的PDF檔案', 'error');
             }
         });
         
@@ -522,26 +695,44 @@
         async function loadFromUrl() {
             let url = document.getElementById('urlInput').value.trim();
             if (!url) {
+                debugLog('請輸入PDF網址', 'error');
                 alert('請輸入PDF網址');
                 return;
             }
             
             // 解析相對路徑為絕對路徑
             const resolvedUrl = resolveUrl(url);
+            debugLog(`開始從 URL 載入: ${resolvedUrl}`);
             
             try {
                 document.getElementById('pdfContainer').innerHTML = '<div class="loading">載入中...</div>';
                 await loadPDF(resolvedUrl, url.split('/').pop());
             } catch (error) {
-                document.getElementById('pdfContainer').innerHTML = `<div class="error">載入失敗: ${error.message}<br><small>嘗試載入的網址: ${resolvedUrl}</small></div>`;
-                console.error('PDF 載入錯誤:', error);
+                const errorMsg = `載入失敗: ${error.message}`;
+                debugLog(errorMsg, 'error');
+                document.getElementById('pdfContainer').innerHTML = `<div class="error">${errorMsg}<br><small>嘗試載入的網址: ${resolvedUrl}</small></div>`;
             }
         }
         
         // 載入PDF
         async function loadPDF(source, fileName) {
             try {
-                pdfDoc = await pdfjsLib.getDocument(source).promise;
+                debugLog(`開始載入PDF: ${fileName || source}`);
+                
+                // 顯示載入狀態
+                const loadingTask = pdfjsLib.getDocument(source);
+                
+                // 監聽載入進度
+                loadingTask.onProgress = function(progress) {
+                    if (progress.total) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        debugLog(`載入進度: ${percent}% (${progress.loaded}/${progress.total})`);
+                    }
+                };
+                
+                pdfDoc = await loadingTask.promise;
+                
+                debugLog(`PDF載入成功！總頁數: ${pdfDoc.numPages}`);
                 document.getElementById('totalPages').textContent = pdfDoc.numPages;
                 document.getElementById('fileName').textContent = fileName || '';
                 document.getElementById('controls').style.display = 'flex';
@@ -549,17 +740,25 @@
                 document.getElementById('pageInput').value = currentPage;
                 renderPage();
             } catch (error) {
+                debugLog(`載入PDF錯誤: ${error.message}`, 'error');
                 throw new Error('無法載入PDF檔案: ' + error.message);
             }
         }
         
         // 渲染頁面
         async function renderPage() {
-            if (!pdfDoc) return;
+            if (!pdfDoc) {
+                debugLog('無PDF文件，無法渲染', 'error');
+                return;
+            }
             
             try {
+                debugLog(`開始渲染第 ${currentPage} 頁，縮放: ${scale}`);
+                
                 const page = await pdfDoc.getPage(currentPage);
                 const viewport = page.getViewport({ scale: scale });
+                
+                debugLog(`頁面尺寸: ${viewport.width} x ${viewport.height}`);
                 
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
@@ -567,10 +766,15 @@
                 canvas.width = viewport.width;
                 canvas.className = isFullscreen ? 'pdf-page fullscreen' : 'pdf-page';
                 
-                await page.render({
+                // 顯示渲染進度
+                document.getElementById('pdfContainer').innerHTML = '<div class="loading">渲染中...</div>';
+                
+                const renderTask = page.render({
                     canvasContext: context,
                     viewport: viewport
-                }).promise;
+                });
+                
+                await renderTask.promise;
                 
                 document.getElementById('pdfContainer').innerHTML = '';
                 document.getElementById('pdfContainer').appendChild(canvas);
@@ -581,8 +785,12 @@
                 // 更新URL（但不重新載入頁面）
                 updateUrlParams();
                 
+                debugLog(`第 ${currentPage} 頁渲染完成`, 'success');
+                
             } catch (error) {
-                document.getElementById('pdfContainer').innerHTML = `<div class="error">渲染失敗: ${error.message}</div>`;
+                const errorMsg = `渲染失敗: ${error.message}`;
+                debugLog(errorMsg, 'error');
+                document.getElementById('pdfContainer').innerHTML = `<div class="error">${errorMsg}</div>`;
             }
         }
         
@@ -590,6 +798,7 @@
         function prevPage() {
             if (currentPage > 1) {
                 currentPage--;
+                debugLog(`切換到第 ${currentPage} 頁`);
                 renderPage();
             }
         }
@@ -598,6 +807,7 @@
         function nextPage() {
             if (pdfDoc && currentPage < pdfDoc.numPages) {
                 currentPage++;
+                debugLog(`切換到第 ${currentPage} 頁`);
                 renderPage();
             }
         }
@@ -607,6 +817,7 @@
             const pageNum = parseInt(document.getElementById('pageInput').value);
             if (pdfDoc && pageNum >= 1 && pageNum <= pdfDoc.numPages) {
                 currentPage = pageNum;
+                debugLog(`跳轉到第 ${currentPage} 頁`);
                 renderPage();
             }
         }
@@ -616,6 +827,8 @@
             const scaleValue = document.getElementById('scaleSelect').value;
             const customScaleInput = document.getElementById('customScale');
             const percentLabel = document.getElementById('percentLabel');
+            
+            debugLog(`縮放模式變更: ${scaleValue}`);
             
             if (scaleValue === 'custom') {
                 // 顯示自訂輸入框
@@ -640,6 +853,8 @@
             } else {
                 scale = parseFloat(scaleValue);
             }
+            
+            debugLog(`新縮放比例: ${scale}`);
             renderPage();
         }
         
@@ -648,6 +863,7 @@
             const customValue = parseInt(document.getElementById('customScale').value);
             if (customValue && customValue >= 10 && customValue <= 500) {
                 scale = customValue / 100;
+                debugLog(`自訂縮放: ${scale}`);
                 renderPage();
             }
         }
@@ -685,6 +901,7 @@
             }
             
             window.history.replaceState({}, '', url);
+            debugLog(`URL 參數已更新: ${url.search}`);
         }
         
         // 產生分享連結
@@ -713,6 +930,8 @@
                 url.searchParams.set('scale', scaleParam);
                 url.searchParams.set('fullscreen', 'true'); // 分享連結預設為全版面
             }
+            
+            debugLog(`產生分享連結: ${url.toString()}`);
             
             // 複製到剪貼簿
             navigator.clipboard.writeText(url.toString()).then(() => {
