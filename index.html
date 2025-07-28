@@ -9,17 +9,32 @@
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             background-color: #f5f5f5;
+            overflow-x: hidden;
         }
         
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
             background: white;
-            border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        /* 首頁模式 */
+        .container.home-mode {
+            max-width: 1200px;
+            margin: 20px auto;
+            border-radius: 8px;
+        }
+        
+        /* 全版面模式 */
+        .container.fullscreen-mode {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            margin: 0;
+            border-radius: 0;
         }
         
         .toolbar {
@@ -30,6 +45,11 @@
             align-items: center;
             gap: 15px;
             flex-wrap: wrap;
+            transition: all 0.3s ease;
+        }
+        
+        .toolbar.hidden {
+            display: none;
         }
         
         .toolbar input[type="file"] {
@@ -84,6 +104,23 @@
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
+            position: relative;
+            z-index: 1000;
+        }
+        
+        .controls.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(248, 249, 250, 0.95);
+            backdrop-filter: blur(10px);
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .controls.fullscreen.show {
+            transform: translateY(0);
         }
         
         .controls button {
@@ -113,11 +150,34 @@
             border-radius: 4px;
         }
         
+        .fullscreen-toggle {
+            background: #17a2b8;
+            margin-left: auto;
+        }
+        
+        .fullscreen-toggle:hover {
+            background: #138496;
+        }
+        
         .pdf-container {
-            height: 600px;
             overflow: auto;
             padding: 20px;
             background: #fafafa;
+            transition: all 0.3s ease;
+        }
+        
+        .pdf-container.home-mode {
+            height: 600px;
+        }
+        
+        .pdf-container.fullscreen-mode {
+            height: calc(100vh - 60px);
+            padding: 0;
+            background: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 20px;
         }
         
         .pdf-page {
@@ -125,6 +185,12 @@
             display: block;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             background: white;
+            transition: all 0.3s ease;
+        }
+        
+        .pdf-page.fullscreen {
+            margin: 0;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
         }
         
         .loading {
@@ -147,7 +213,12 @@
             background: #e9ecef;
             padding: 15px;
             border-radius: 4px;
-            margin-top: 10px;
+            margin: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .url-examples.hidden {
+            display: none;
         }
         
         .url-examples h4 {
@@ -167,11 +238,42 @@
             border-radius: 2px;
             font-family: monospace;
         }
+        
+        /* 全版面時隱藏控制項 */
+        .auto-hide-controls {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        
+        .container.fullscreen-mode:hover .auto-hide-controls {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* 鍵盤快捷鍵提示 */
+        .keyboard-hints {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1001;
+        }
+        
+        .keyboard-hints.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="toolbar">
+    <div class="container home-mode" id="container">
+        <div class="toolbar" id="toolbar">
             <label for="fileInput">📁 上傳PDF</label>
             <input type="file" id="fileInput" accept=".pdf">
             
@@ -194,16 +296,18 @@
                 <option value="1.5">150%</option>
                 <option value="2">200%</option>
                 <option value="page-width">頁面寬度</option>
+                <option value="page-fit">適合頁面</option>
             </select>
             
             <button onclick="generateShareLink()">🔗 產生分享連結</button>
+            <button class="fullscreen-toggle" onclick="toggleFullscreen()">🖥️ 全版面模式</button>
         </div>
         
-        <div class="pdf-container" id="pdfContainer">
+        <div class="pdf-container home-mode" id="pdfContainer">
             <div class="loading">請上傳PDF檔案或輸入PDF網址</div>
         </div>
         
-        <div class="url-examples">
+        <div class="url-examples" id="urlExamples">
             <h4>💡 分享連結範例：</h4>
             <p><code>?url=PDF網址&page=5</code> - 開啟指定PDF的第5頁</p>
             <p><code>?url=PDF網址&page=2&scale=150</code> - 開啟第2頁並放大150%</p>
@@ -211,10 +315,16 @@
         </div>
     </div>
 
+    <div class="keyboard-hints" id="keyboardHints">
+        <div>快捷鍵: ← → 翻頁 | ESC 退出全版面 | F 全版面模式</div>
+    </div>
+
     <script>
         let pdfDoc = null;
         let currentPage = 1;
         let scale = 1;
+        let isFullscreen = false;
+        let hideControlsTimeout;
         
         // 設定 PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -225,6 +335,7 @@
             const pdfUrl = urlParams.get('url');
             const page = urlParams.get('page');
             const scaleParam = urlParams.get('scale');
+            const fullscreen = urlParams.get('fullscreen') === 'true';
             
             if (pdfUrl) {
                 document.getElementById('urlInput').value = pdfUrl;
@@ -238,7 +349,111 @@
                         document.getElementById('scaleSelect').value = scale;
                         renderPage();
                     }
+                    
+                    // 如果URL參數指定全版面模式，自動切換
+                    if (fullscreen) {
+                        setTimeout(() => toggleFullscreen(), 500);
+                    }
+                    
+                    // 如果有PDF URL，隱藏上傳工具列和提示
+                    hideUploadUI();
                 });
+            }
+        });
+        
+        // 隱藏上傳介面
+        function hideUploadUI() {
+            document.getElementById('toolbar').classList.add('hidden');
+            document.getElementById('urlExamples').classList.add('hidden');
+        }
+        
+        // 顯示上傳介面
+        function showUploadUI() {
+            document.getElementById('toolbar').classList.remove('hidden');
+            document.getElementById('urlExamples').classList.remove('hidden');
+        }
+        
+        // 全版面模式切換
+        function toggleFullscreen() {
+            const container = document.getElementById('container');
+            const controls = document.getElementById('controls');
+            const pdfContainer = document.getElementById('pdfContainer');
+            const keyboardHints = document.getElementById('keyboardHints');
+            
+            isFullscreen = !isFullscreen;
+            
+            if (isFullscreen) {
+                container.className = 'container fullscreen-mode';
+                controls.classList.add('fullscreen', 'auto-hide-controls');
+                pdfContainer.className = 'pdf-container fullscreen-mode';
+                hideUploadUI();
+                keyboardHints.classList.add('show');
+                
+                // 調整縮放以適合螢幕
+                if (scale === 1) {
+                    scale = Math.min(window.innerWidth / 595, (window.innerHeight - 100) / 842) * 0.9;
+                    document.getElementById('scaleSelect').value = 'page-fit';
+                }
+                
+                // 設定自動隱藏控制項
+                setupAutoHideControls();
+            } else {
+                container.className = 'container home-mode';
+                controls.classList.remove('fullscreen', 'auto-hide-controls', 'show');
+                pdfContainer.className = 'pdf-container home-mode';
+                showUploadUI();
+                keyboardHints.classList.remove('show');
+                
+                clearTimeout(hideControlsTimeout);
+            }
+            
+            renderPage();
+            updateUrlParams();
+        }
+        
+        // 設定自動隱藏控制項
+        function setupAutoHideControls() {
+            const controls = document.getElementById('controls');
+            
+            // 滑鼠移動時顯示控制項
+            document.addEventListener('mousemove', showControlsTemporarily);
+            
+            function showControlsTemporarily() {
+                if (isFullscreen) {
+                    controls.classList.add('show');
+                    clearTimeout(hideControlsTimeout);
+                    hideControlsTimeout = setTimeout(() => {
+                        controls.classList.remove('show');
+                    }, 3000);
+                }
+            }
+        }
+        
+        // 鍵盤快捷鍵
+        document.addEventListener('keydown', function(e) {
+            if (!pdfDoc) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    prevPage();
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    nextPage();
+                    break;
+                case 'Escape':
+                    if (isFullscreen) {
+                        toggleFullscreen();
+                    }
+                    break;
+                case 'f':
+                case 'F':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        toggleFullscreen();
+                    }
+                    break;
             }
         });
         
@@ -249,6 +464,7 @@
                 const fileReader = new FileReader();
                 fileReader.onload = function() {
                     loadPDF(new Uint8Array(this.result), file.name);
+                    hideUploadUI();
                 };
                 fileReader.readAsArrayBuffer(file);
             }
@@ -297,7 +513,7 @@
                 const context = canvas.getContext('2d');
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
-                canvas.className = 'pdf-page';
+                canvas.className = isFullscreen ? 'pdf-page fullscreen' : 'pdf-page';
                 
                 await page.render({
                     canvasContext: context,
@@ -347,7 +563,12 @@
         function changeScale() {
             const scaleValue = document.getElementById('scaleSelect').value;
             if (scaleValue === 'page-width') {
-                scale = window.innerWidth * 0.8 / 595; // 假設PDF寬度為595pt
+                const containerWidth = isFullscreen ? window.innerWidth : 1160;
+                scale = containerWidth * 0.8 / 595;
+            } else if (scaleValue === 'page-fit') {
+                const containerWidth = isFullscreen ? window.innerWidth : 1160;
+                const containerHeight = isFullscreen ? window.innerHeight - 100 : 560;
+                scale = Math.min(containerWidth * 0.9 / 595, containerHeight * 0.9 / 842);
             } else {
                 scale = parseFloat(scaleValue);
             }
@@ -365,6 +586,7 @@
                 url.searchParams.set('url', pdfUrl);
                 url.searchParams.set('page', currentPage);
                 url.searchParams.set('scale', Math.round(scale * 100));
+                url.searchParams.set('fullscreen', isFullscreen);
             }
             
             window.history.replaceState({}, '', url);
@@ -384,6 +606,7 @@
                 url.searchParams.set('url', pdfUrl);
                 url.searchParams.set('page', currentPage);
                 url.searchParams.set('scale', Math.round(scale * 100));
+                url.searchParams.set('fullscreen', 'true'); // 分享連結預設為全版面
             }
             
             // 複製到剪貼簿
