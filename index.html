@@ -297,7 +297,13 @@
                 <option value="2">200%</option>
                 <option value="page-width">頁面寬度</option>
                 <option value="page-fit">適合頁面</option>
+                <option value="custom">自訂縮放</option>
             </select>
+            
+            <input type="number" id="customScale" min="10" max="500" step="5" value="100" 
+                   style="width: 70px; padding: 6px; border: 1px solid #ddd; border-radius: 4px; display: none;" 
+                   placeholder="%" onchange="applyCustomScale()" onkeypress="handleCustomScaleEnter(event)">
+            <span id="percentLabel" style="display: none; margin-left: 2px;">%</span>
             
             <button onclick="generateShareLink()">🔗 產生分享連結</button>
             <button class="fullscreen-toggle" onclick="toggleFullscreen()">🖥️ 全版面模式</button>
@@ -345,8 +351,23 @@
                         goToPage();
                     }
                     if (scaleParam) {
-                        scale = parseFloat(scaleParam) / 100;
-                        document.getElementById('scaleSelect').value = scale;
+                        const scaleValue = parseFloat(scaleParam) / 100;
+                        scale = scaleValue;
+                        
+                        // 設定對應的選項
+                        const scaleSelect = document.getElementById('scaleSelect');
+                        const customScaleInput = document.getElementById('customScale');
+                        const percentLabel = document.getElementById('percentLabel');
+                        
+                        if ([50, 75, 100, 125, 150, 200].includes(parseInt(scaleParam))) {
+                            scaleSelect.value = scaleValue;
+                        } else {
+                            scaleSelect.value = 'custom';
+                            customScaleInput.value = scaleParam;
+                            customScaleInput.style.display = 'inline-block';
+                            percentLabel.style.display = 'inline';
+                        }
+                        
                         renderPage();
                     }
                     
@@ -562,6 +583,22 @@
         // 改變縮放
         function changeScale() {
             const scaleValue = document.getElementById('scaleSelect').value;
+            const customScaleInput = document.getElementById('customScale');
+            const percentLabel = document.getElementById('percentLabel');
+            
+            if (scaleValue === 'custom') {
+                // 顯示自訂輸入框
+                customScaleInput.style.display = 'inline-block';
+                percentLabel.style.display = 'inline';
+                customScaleInput.focus();
+                customScaleInput.select();
+                return;
+            } else {
+                // 隱藏自訂輸入框
+                customScaleInput.style.display = 'none';
+                percentLabel.style.display = 'none';
+            }
+            
             if (scaleValue === 'page-width') {
                 const containerWidth = isFullscreen ? window.innerWidth : 1160;
                 scale = containerWidth * 0.8 / 595;
@@ -575,17 +612,44 @@
             renderPage();
         }
         
+        // 應用自訂縮放
+        function applyCustomScale() {
+            const customValue = parseInt(document.getElementById('customScale').value);
+            if (customValue && customValue >= 10 && customValue <= 500) {
+                scale = customValue / 100;
+                renderPage();
+            }
+        }
+        
+        // 處理自訂縮放輸入框的 Enter 鍵
+        function handleCustomScaleEnter(event) {
+            if (event.key === 'Enter') {
+                applyCustomScale();
+                event.target.blur(); // 失去焦點
+            }
+        }
+        
         // 更新URL參數
         function updateUrlParams() {
             if (!pdfDoc) return;
             
             const url = new URL(window.location);
             const pdfUrl = document.getElementById('urlInput').value;
+            const scaleSelect = document.getElementById('scaleSelect');
+            const customScaleInput = document.getElementById('customScale');
             
             if (pdfUrl) {
                 url.searchParams.set('url', pdfUrl);
                 url.searchParams.set('page', currentPage);
-                url.searchParams.set('scale', Math.round(scale * 100));
+                
+                // 處理縮放參數
+                let scaleParam;
+                if (scaleSelect.value === 'custom') {
+                    scaleParam = customScaleInput.value || Math.round(scale * 100);
+                } else {
+                    scaleParam = Math.round(scale * 100);
+                }
+                url.searchParams.set('scale', scaleParam);
                 url.searchParams.set('fullscreen', isFullscreen);
             }
             
@@ -601,11 +665,21 @@
             
             const url = new URL(window.location);
             const pdfUrl = document.getElementById('urlInput').value;
+            const scaleSelect = document.getElementById('scaleSelect');
+            const customScaleInput = document.getElementById('customScale');
             
             if (pdfUrl) {
                 url.searchParams.set('url', pdfUrl);
                 url.searchParams.set('page', currentPage);
-                url.searchParams.set('scale', Math.round(scale * 100));
+                
+                // 處理縮放參數
+                let scaleParam;
+                if (scaleSelect.value === 'custom') {
+                    scaleParam = customScaleInput.value || Math.round(scale * 100);
+                } else {
+                    scaleParam = Math.round(scale * 100);
+                }
+                url.searchParams.set('scale', scaleParam);
                 url.searchParams.set('fullscreen', 'true'); // 分享連結預設為全版面
             }
             
