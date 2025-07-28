@@ -1,0 +1,20 @@
+{
+  "type": "static",
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "installCommand": "",
+  "framework": "static",
+  "routes": [
+    {
+      "src": "/pdfs/(.*)",
+      "dest": "/pdfs/$1",
+      "headers": {
+        "Content-Type": "application/pdf"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
