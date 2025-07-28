@@ -325,20 +325,20 @@
         <div>快捷鍵: ← → 翻頁 | ESC 退出全版面 | F 全版面模式</div>
     </div>
 
-    <script>
+        <script>
         let pdfDoc = null;
         let currentPage = 1;
         let scale = 1;
         let isFullscreen = false;
         let hideControlsTimeout;
-        
+    
         // 設定 PDF.js worker
         try {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         } catch (error) {
             console.error(`PDF.js worker 設定失敗: ${error.message}`);
         }
-        
+    
         // 解析相對路徑為絕對路徑
         function resolveUrl(url) {
             if (!url) return url;
@@ -355,22 +355,30 @@
             
             return baseUrl + url;
         }
-        
-        // 頁面載入時檢查URL參數
+    
+        // 頁面載入時檢查URL參數 (*** 主要修改區域 ***)
         window.addEventListener('DOMContentLoaded', function() {
             const urlParams = new URLSearchParams(window.location.search);
             const pdfUrl = urlParams.get('url');
-            const page = urlParams.get('page');
+            const pageParam = urlParams.get('page');
             const scaleParam = urlParams.get('scale');
-            const fullscreen = urlParams.get('fullscreen') === 'true';
-            
+            const fullscreenParam = urlParams.get('fullscreen') === 'true';
+    
             if (pdfUrl) {
                 document.getElementById('urlInput').value = pdfUrl;
+                
+                // 先載入PDF，但不渲染
                 loadFromUrl().then(() => {
-                    if (page) {
-                        currentPage = parseInt(page);
-                        goToPage();
+                    // PDF載入成功後，再根據URL參數設定狀態
+                    let needsRender = false;
+    
+                    if (pageParam) {
+                        const pageNum = parseInt(pageParam);
+                        if (pdfDoc && pageNum >= 1 && pageNum <= pdfDoc.numPages) {
+                            currentPage = pageNum;
+                        }
                     }
+    
                     if (scaleParam) {
                         const scaleValue = parseFloat(scaleParam) / 100;
                         scale = scaleValue;
@@ -387,33 +395,36 @@
                             customScaleInput.style.display = 'inline-block';
                             percentLabel.style.display = 'inline';
                         }
-                        
-                        renderPage();
                     }
                     
-                    if (fullscreen) {
+                    // 最後，根據所有設定好的參數，執行第一次渲染
+                    renderPage();
+                    
+                    // 如果URL指定全版面模式，自動切換
+                    if (fullscreenParam) {
                         setTimeout(() => toggleFullscreen(), 500);
                     }
                     
                     hideUploadUI();
+    
                 }).catch(error => {
                     console.error(`載入PDF失敗: ${error.message}`);
                 });
             }
         });
-        
+    
         // 隱藏上傳介面
         function hideUploadUI() {
             document.getElementById('toolbar').classList.add('hidden');
             document.getElementById('urlExamples').classList.add('hidden');
         }
-        
+    
         // 顯示上傳介面
         function showUploadUI() {
             document.getElementById('toolbar').classList.remove('hidden');
             document.getElementById('urlExamples').classList.remove('hidden');
         }
-        
+    
         // 全版面模式切換
         function toggleFullscreen() {
             const container = document.getElementById('container');
@@ -449,7 +460,7 @@
             renderPage();
             updateUrlParams();
         }
-        
+    
         // 設定自動隱藏控制項
         function setupAutoHideControls() {
             const controls = document.getElementById('controls');
@@ -466,7 +477,7 @@
                 }
             }
         }
-        
+    
         // 鍵盤快捷鍵
         document.addEventListener('keydown', function(e) {
             if (!pdfDoc) return;
@@ -494,15 +505,16 @@
                     break;
             }
         });
-        
-        // 檔案上傳處理
+    
+        // 檔案上傳處理 (*** 修改 ***)
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             
             if (file && file.type === 'application/pdf') {
                 const fileReader = new FileReader();
-                fileReader.onload = function() {
-                    loadPDF(new Uint8Array(this.result), file.name);
+                fileReader.onload = async function() {
+                    await loadPDF(new Uint8Array(this.result), file.name);
+                    renderPage(); // 載入後手動觸發渲染
                     hideUploadUI();
                 };
                 fileReader.onerror = function(error) {
@@ -513,7 +525,7 @@
                 alert('請選擇有效的PDF檔案');
             }
         });
-        
+    
         // 從URL載入PDF
         async function loadFromUrl() {
             let url = document.getElementById('urlInput').value.trim();
@@ -533,8 +545,8 @@
                 document.getElementById('pdfContainer').innerHTML = `<div class="error">${errorMsg}<br><small>嘗試載入的網址: ${resolvedUrl}</small></div>`;
             }
         }
-        
-        // 載入PDF
+    
+        // 載入PDF (*** 修改 ***)
         async function loadPDF(source, fileName) {
             try {
                 const loadingTask = pdfjsLib.getDocument(source);
@@ -543,15 +555,15 @@
                 document.getElementById('totalPages').textContent = pdfDoc.numPages;
                 document.getElementById('fileName').textContent = fileName || '';
                 document.getElementById('controls').style.display = 'flex';
-                currentPage = 1;
+                currentPage = 1; // 預設為1，但先不渲染
                 document.getElementById('pageInput').value = currentPage;
-                renderPage();
+                // **移除這裡的 renderPage()**
             } catch (error) {
                 console.error(`載入PDF錯誤: ${error.message}`);
                 throw new Error('無法載入PDF檔案: ' + error.message);
             }
         }
-        
+    
         // 渲染頁面
         async function renderPage() {
             if (!pdfDoc) return;
@@ -586,7 +598,7 @@
                 document.getElementById('pdfContainer').innerHTML = `<div class="error">${errorMsg}</div>`;
             }
         }
-        
+    
         // 上一頁
         function prevPage() {
             if (currentPage > 1) {
@@ -594,7 +606,7 @@
                 renderPage();
             }
         }
-        
+    
         // 下一頁
         function nextPage() {
             if (pdfDoc && currentPage < pdfDoc.numPages) {
@@ -602,7 +614,7 @@
                 renderPage();
             }
         }
-        
+    
         // 跳轉到指定頁面
         function goToPage() {
             const pageNum = parseInt(document.getElementById('pageInput').value);
@@ -611,7 +623,7 @@
                 renderPage();
             }
         }
-        
+    
         // 改變縮放
         function changeScale() {
             const scaleValue = document.getElementById('scaleSelect').value;
@@ -642,7 +654,7 @@
             
             renderPage();
         }
-        
+    
         // 應用自訂縮放
         function applyCustomScale() {
             const customValue = parseInt(document.getElementById('customScale').value);
@@ -651,7 +663,7 @@
                 renderPage();
             }
         }
-        
+    
         // 處理自訂縮放輸入框的 Enter 鍵
         function handleCustomScaleEnter(event) {
             if (event.key === 'Enter') {
@@ -659,7 +671,7 @@
                 event.target.blur();
             }
         }
-        
+    
         // 更新URL參數
         function updateUrlParams() {
             if (!pdfDoc) return;
@@ -685,7 +697,7 @@
             
             window.history.replaceState({}, '', url);
         }
-        
+    
         // 產生分享連結
         function generateShareLink() {
             if (!pdfDoc) {
