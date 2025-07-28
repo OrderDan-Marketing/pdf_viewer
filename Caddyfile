@@ -1,0 +1,39 @@
+# Caddyfile - Zeabur PDF 支援配置
+
+{
+    auto_https off
+}
+
+:80 {
+    root * /usr/share/caddy
+    
+    # PDF 檔案 MIME 類型設定
+    @pdf path *.pdf
+    header @pdf {
+        Content-Type application/pdf
+        Cache-Control "public, max-age=31536000"
+        -Server
+    }
+    
+    # 其他靜態檔案
+    @static path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+    header @static Cache-Control "public, max-age=31536000"
+    
+    # HTML 檔案
+    @html path *.html
+    header @html {
+        Content-Type "text/html; charset=utf-8"
+        Cache-Control "public, max-age=3600"
+    }
+    
+    # 處理 SPA 路由
+    try_files {path} {path}/ /index.html
+    
+    # 啟用檔案服務
+    file_server
+    
+    # 錯誤處理
+    handle_errors {
+        respond "File not found" 404
+    }
+}
