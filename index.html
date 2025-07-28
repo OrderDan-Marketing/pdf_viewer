@@ -315,8 +315,8 @@
         
         <div class="url-examples" id="urlExamples">
             <h4>💡 分享連結範例：</h4>
-            <p><code>?url=PDF網址&page=5</code> - 開啟指定PDF的第5頁</p>
-            <p><code>?url=PDF網址&page=2&scale=150</code> - 開啟第2頁並放大150%</p>
+            <p><code>?url=pdfs/crm-pos-guide.pdf&page=5</code> - 開啟CRM指南第5頁</p>
+            <p><code>?url=pdfs/crm-pos-guide.pdf&page=2&scale=150</code> - 開啟第2頁並放大150%</p>
             <p>您可以將產生的分享連結發送給其他人，他們點擊後會直接跳轉到指定頁面</p>
         </div>
     </div>
@@ -334,6 +334,31 @@
         
         // 設定 PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        // 解析相對路徑為絕對路徑
+        function resolveUrl(url) {
+            if (!url) return url;
+            
+            // 如果已經是完整的 HTTP/HTTPS URL，直接返回
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                return url;
+            }
+            
+            // 處理相對路徑
+            const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+            
+            // 移除開頭的 ./ 如果存在
+            if (url.startsWith('./')) {
+                url = url.substring(2);
+            }
+            
+            // 組合完整 URL
+            const fullUrl = baseUrl + url;
+            console.log('原始路徑:', url);
+            console.log('解析後路徑:', fullUrl);
+            
+            return fullUrl;
+        }
         
         // 頁面載入時檢查URL參數
         window.addEventListener('DOMContentLoaded', function() {
@@ -378,6 +403,8 @@
                     
                     // 如果有PDF URL，隱藏上傳工具列和提示
                     hideUploadUI();
+                }).catch(error => {
+                    console.error('載入PDF失敗:', error);
                 });
             }
         });
@@ -493,17 +520,21 @@
         
         // 從URL載入PDF
         async function loadFromUrl() {
-            const url = document.getElementById('urlInput').value.trim();
+            let url = document.getElementById('urlInput').value.trim();
             if (!url) {
                 alert('請輸入PDF網址');
                 return;
             }
             
+            // 解析相對路徑為絕對路徑
+            const resolvedUrl = resolveUrl(url);
+            
             try {
                 document.getElementById('pdfContainer').innerHTML = '<div class="loading">載入中...</div>';
-                await loadPDF(url, url.split('/').pop());
+                await loadPDF(resolvedUrl, url.split('/').pop());
             } catch (error) {
-                document.getElementById('pdfContainer').innerHTML = `<div class="error">載入失敗: ${error.message}</div>`;
+                document.getElementById('pdfContainer').innerHTML = `<div class="error">載入失敗: ${error.message}<br><small>嘗試載入的網址: ${resolvedUrl}</small></div>`;
+                console.error('PDF 載入錯誤:', error);
             }
         }
         
@@ -518,7 +549,7 @@
                 document.getElementById('pageInput').value = currentPage;
                 renderPage();
             } catch (error) {
-                throw new Error('無法載入PDF檔案');
+                throw new Error('無法載入PDF檔案: ' + error.message);
             }
         }
         
