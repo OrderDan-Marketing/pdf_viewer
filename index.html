@@ -796,9 +796,56 @@
             
             if (pdfUrl) {
                 url.searchParams.set('url', pdfUrl);
+                url.searchParams.set('page', currentPage);
                 
                 let scaleParam;
                 if (scaleSelect.value === 'custom') {
                     scaleParam = customScaleInput.value || Math.round(scale * 100);
                 } else {
-                    scale
+                    scaleParam = Math.round(scale * 100);
+                }
+                url.searchParams.set('scale', scaleParam);
+                url.searchParams.set('fullscreen', isFullscreen);
+            }
+            
+            window.history.replaceState({}, '', url);
+            console.log(`🔗 URL參數已更新: page=${currentPage}`);
+        }
+
+        // 產生分享連結
+        function generateShareLink() {
+            if (!pdfDoc) {
+                alert('請先載入PDF檔案');
+                return;
+            }
+            
+            const url = new URL(window.location);
+            const pdfUrl = document.getElementById('urlInput').value;
+            const scaleSelect = document.getElementById('scaleSelect');
+            const customScaleInput = document.getElementById('customScale');
+            
+            if (pdfUrl) {
+                url.searchParams.set('url', pdfUrl);
+                url.searchParams.set('page', currentPage);
+                
+                let scaleParam;
+                if (scaleSelect.value === 'custom') {
+                    scaleParam = customScaleInput.value || Math.round(scale * 100);
+                } else {
+                    scaleParam = Math.round(scale * 100);
+                }
+                url.searchParams.set('scale', scaleParam);
+                url.searchParams.set('fullscreen', 'true');
+            }
+            
+            console.log(`🔗 產生分享連結: ${url.toString()}`);
+            
+            navigator.clipboard.writeText(url.toString()).then(() => {
+                alert('分享連結已複製到剪貼簿！\n\n' + url.toString());
+            }).catch(() => {
+                prompt('請複製以下連結:', url.toString());
+            });
+        }
+    </script>
+</body>
+</html>
